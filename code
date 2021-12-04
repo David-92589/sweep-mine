@@ -1,0 +1,278 @@
+#include<graphics.h>
+#include <iostream>
+#include <time.h>
+
+#define COL 16            //宽
+#define ROW 30            //长
+#define MINE_NUM  60      //雷的数量
+#define SIZE 25           //图片大小
+#define IMAGE_NUM 15      //图片的数量
+int map[ROW + 2][COL + 2];//+2是添加了辅助区，用来防止数组越界
+int count = 0;            //点开的空格数
+IMAGE img[IMAGE_NUM];     //保存图片的数组
+char fileName[20];        //文件名缓冲区
+
+void gameInit();             //游戏初始化
+void image();                //加载图片
+void gameDraw();             //打印游戏区
+int play();                  //鼠标点击开玩
+int open(int r, int c);      //左键点开格子
+void blankOpen(int r, int c);//连续展开
+void boom();                 //输的时候显示所有雷
+void print();                //显示剩余雷数
+
+int main()
+{
+    HWND scanmine = initgraph(ROW * SIZE + 100,COL*SIZE);
+    image();
+    gameInit();
+    while (1) {
+        gameDraw();
+        print();
+          if (play() == -1) {
+            boom();
+            gameDraw();
+           MessageBox(scanmine,"你踩到雷了，你输","",MB_OK);
+                break;
+             }
+            if (ROW * COL - MINE_NUM == count) {
+                MessageBox(scanmine, "你赢了","",MB_OK);
+                break;
+            }
+    }
+    closegraph();
+    return 0;
+}
+
+//生成雷
+void gameInit() {
+    srand((unsigned)time(NULL));             //随机数
+    for (int row = 0; row < ROW + 2; row++) {//初始化棋盘
+        for (int col = 0; col < COL + 2; col++) {
+            map[row][col] = 0;
+        }
+    }
+    //生成雷-随机生成60个雷（可能出现重复现象不一定是60个）
+    for (int n = 0; n < MINE_NUM; n++) {
+        int row = rand() % ROW + 1;          //范围为[1,30]
+        int col = rand() % COL + 1;          //范围为[1,16]
+        if (map[row][col] == 0) {
+            map[row][col] = -1;              //雷的值为-1
+        }
+}
+
+    //遍历数组找空格
+    for (int i = 1; i <= ROW; i++) {
+        for (int j = 1; j <= COL; j++) {
+            if (map[i][j] != -1) {          //该坐标不是地雷
+                for (int m = i - 1; m <= i + 1; m++) {
+                    for (int n = j - 1; n <= j + 1; n++) {
+                        if (map[m][n] == -1) {
+                            map[i][j]++;      
+//为map[i][j]上赋值为周围雷的数量和
+                        }
+                    }
+                }
+            }
+        }
+    }
+    //加密
+    for (int i = 1; i <= ROW; i++) {
+        for (int j = 1; j <= COL; j++) {
+            map[i][j] += 20;
+        }
+    }
+}
+//打印游戏区
+void gameDraw() {
+    for (int i = 1; i <= ROW; i++) {
+        for (int j = 1; j <= COL; j++) {
+            //贴雷
+          if (map[i][j] == -1) {
+             putimage((i - 1) * SIZE, (j - 1) * SIZE, &img[11]);
+            }
+            //贴数字
+          else if (map[i][j] >= 0 && map[i][j] <= 8) {
+             putimage((i - 1) * SIZE, (j - 1) * SIZE, &img[map[i][j]]);
+            }
+   //贴空白——第一遍打印游戏区给雷区和空白区都贴上空白图片
+          else if (map[i][j] >= 19 && map[i][j] <= 28) {
+                putimage((i - 1) * SIZE, (j - 1) * SIZE, &img[9]);
+            }
+            //贴旗子
+            else if (map[i][j] >= 39 && map[i][j] <= 48) {
+                putimage((i - 1) * SIZE, (j - 1) * SIZE, &img[10]);
+            }
+            //贴问号
+            else if (map[i][j] >= 59 && map[i][j] <= 68) {
+                putimage((i - 1) * SIZE, (j - 1) * SIZE, &img[12]);
+            }
+            //贴炸弹
+            else if (map[i][j] == -2) {
+                putimage((i - 1) * SIZE, (j - 1) * SIZE, &img[13]);
+            }
+        }
+    }
+}
+//加载图片
+void image() {
+
+    for (int i = 0; i < IMAGE_NUM; i++) {
+        sprintf_s(fileName, "./image/%d.gif", i);//把i拼接成字符串赋给缓冲区
+        loadimage(&img[i], fileName, SIZE, SIZE);//通过字符缓冲区里的地址找到加载相对应的图片
+    }
+
+}
+
+//连续展开
+void blankOpen(int r, int c) {
+    map[r][c] -= 20;//当前格子进行解密
+    count++;
+    //点开后遍历九宫格
+    for (int m = r - 1; m <= r + 1; m++) {
+        for (int n = c - 1; n <= c + 1; n++) {
+            if (m >= 1 && m <= ROW && n >= 1 && n <= COL) {//判断在游戏区
+                if (map[m][n] >= 19 && map[m][n] <= 28) {  //判断是未解密的格子
+                    if (map[m][n] != 20) {        //判断格子不是空白格
+                        map[m][n] -= 20;
+                        count++;
+                    }
+                    else {     //判断格子是空白格则进行连续展开
+                        blankOpen(m, n);
+                    }
+                }
+            }
+        }
+    }
+}
+//左键点开的格子，遍历周围的格子
+int open(int r, int c) {
+    int flag = 0;
+    for (int m = r - 1; m <= r + 1; m++) {
+        for (int n = c - 1; n <= c + 1; c++) {
+//保证判断的是游戏区
+            if (m >= 1 && m <= ROW && n >= 1 && n <= COL) {
+//判断格子周围的空白格子是否有雷
+                if (map[m][n] == 19) {    
+ flag = 1;
+                }
+            }
+        }
+    }
+    if (flag == 0) {//当前格子周围没有雷-进行解密-以及连续展开
+        for (int m = r - 1; m <= r + 1; m++)
+        {
+            for (int n = c - 1; n <= c + 1; n++)
+            {     //判断是否是未解密的格子
+                if (map[m][n] >= 19 && map[m][n] <= 28)                {
+                    map[m][n] -= 20;
+                    blankOpen(r, c);
+                }
+
+            }
+        }
+    }
+    else if (flag == 1)//当前格子周围有雷
+    {
+        for (int m = r - 1; m <= r + 1; m++)
+        {
+            for (int n = c - 1; n <= c + 1; n++)
+            {
+                if (map[m][n] > 39 && map[m][n] <= 48)
+                {
+                    return -1;
+                }
+            }
+        }
+    }
+}
+//输的时候显示所有雷的位置，并引爆
+void boom()
+{
+    for (int r = 1; r <= ROW; r++)
+    {
+        for (int c = 1; c <= COL; c++)
+        {
+            if (map[r][c] == 19)
+            {
+                map[r][c] -= 21;
+            }
+            else if (map[r][c] == -1)
+            {
+                map[r][c] -= 1;
+            }
+        }
+    }
+}
+//显示剩余雷数
+void print()
+{
+    char num[MINE_NUM];
+    int n = 0;
+    for (int r = 1; r <= ROW; r++)
+    {
+        for (int c = 1; c <= COL; c++)
+        {
+            if (map[r][c] == 19 || map[r][c] == -1)
+            {
+                n++;
+            }
+        }
+    }
+    outtextxy(770, 200, "剩余的雷:");
+    sprintf_s(num, "%02d", n);
+    outtextxy(790, 230, num);
+}
+//鼠标点击开玩
+int play() {
+    MOUSEMSG msg = { 0 };
+    int r, c;
+    while (1) {
+        msg = GetMouseMsg();
+        switch (msg.uMsg) {
+        case WM_LBUTTONDOWN:                //鼠标左键的消息
+            r = msg.x / SIZE + 1;           //获取鼠标左键点击的位置
+            c = msg.y / SIZE + 1;
+//点击了没有解密过的待点击格子
+            if (map[r][c] >= 19 && map[r][c] <= 28) {                if(map[r][c] == 20) {  //点到周围一圈没有地雷的空格上
+                    blankOpen(r, c);
+                    return map[r][c];
+                }
+                else {
+                    map[r][c] -= 20;
+//解密-把地雷格子的数值重新变为-1以及显示地雷数的空格值0~8
+                    count++;
+                    return map[r][c];
+                }
+            }
+            else if (map[r][c] >= 0 && map[r][c] <= 8) {
+//点击了解密后的待点击格子时
+                open(r, c);
+                if (open(r, c) == -1) {
+                    return -1;
+                }
+                else {
+                    return map[r][c];
+                }
+            }
+            //插旗子，拔旗子
+        case WM_RBUTTONDOWN:                           //鼠标右键的消息
+            r = msg.x / SIZE + 1;
+            c = msg.y / SIZE + 1;
+            if (map[r][c] >= 19 && map[r][c] <= 28)    //插旗子
+            {
+                map[r][c] += 20;
+            }
+            else if (map[r][c] >= 39 && map[r][c] <= 48)//插问号
+            {
+                map[r][c] += 20;
+            }
+            else if (map[r][c] >= 59 && map[r][c] <= 68)//拔旗子
+            {
+                map[r][c] -= 40;
+            }
+            return map[r][c];
+            break;
+        }
+    }
+}
